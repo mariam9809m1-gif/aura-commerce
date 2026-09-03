@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // GLOBAL SECURITY NET & REUSABLE HARDENED PRIMITIVES
+    // =========================================================================
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Admin authorization check:
+    // Verified either by existence in admins collection or matching authenticated runtime email
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'mariam9809.m1@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    // =========================================================================
+    // SCHEMA VALIDATION HELPERS (Anti-Update-Gap)
+    // =========================================================================
+
+    function isValidProduct(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.name is string && data.name.size() >= 3 && data.name.size() <= 120 &&
+             data.description is string && data.description.size() >= 10 && data.description.size() <= 2000 &&
+             data.price is number && data.price >= 0 &&
+             data.category is string && (
+               data.category == 'Electronics' ||
+               data.category == 'Apparel' ||
+               data.category == 'Home & Living' ||
+               data.category == 'Accessories' ||
+               data.category == 'Footwear'
+             ) &&
+             data.stock is number && data.stock >= 0 &&
+             data.sku is string && data.sku.size() <= 32 && data.sku.matches('^[a-zA-Z0-9_\\-]+$') &&
+             data.imageUrl is string && data.imageUrl.size() <= 1000;
+    }
+
+    function isValidOrder(data) {
+      return data.id is string && isValidId(data.id) &&
+             data.userId is string && data.userId.size() <= 64 &&
+             data.customerEmail is string && data.customerEmail.size() <= 120 &&
+             data.customerName is string && data.customerName.size() >= 2 && data.customerName.size() <= 100 &&
+             data.shippingAddress is string && data.shippingAddress.size() <= 250 &&
+             data.total is number && data.total >= 0 &&
+             data.status is string && (
+               data.status == 'Pending' ||
+               data.status == 'Processing' ||
+               data.status == 'Shipped' ||
+               data.status == 'Delivered' ||
+               data.status == 'Cancelled'
+             ) &&
+             data.paymentStatus is string && (
+               data.paymentStatus == 'paid' ||
+               data.paymentStatus == 'pending' ||
+               data.paymentStatus == 'failed'
+             );
+    }
+
+    // =========================================================================
+    // COLLECTION: /products/{productId}
+    // Public catalog browsing; admin-only creation, mutation, and deletion.
+    // =========================================================================
+    match /products/{productId} {
+      allow read: if true;
+
+      allow create: if isAdmin() &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       incoming().id == productId;
+
+      allow update: if isAdmin() &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming()) &&
+                       incoming().id == existing().id;
+
+      allow delete: if isAdmin() && isValidId(productId);
+    }
+
+    // =========================================================================
+    // COLLECTION: /orders/{orderId}
+    // Strict PII isolation; only purchaser or admin can read;
+    // status transitions strictly enforced.
+    // =========================================================================
+    match /orders/{orderId} {
+      // Single doc read: must be owner or admin
+      allow get: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      // List queries: must enforce resource.data.userId == request.auth.uid to prevent PII harvesting
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+
+      // Order creation: customer creates their own order
+      allow create: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       isValidOrder(incoming()) &&
+                       incoming().id == orderId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'Pending';
+
+      // Order updates:
+      // Customers can only cancel pending orders.
+      // Admins can update fulfillment status.
+      allow update: if isSignedIn() && (
+        (
+          // Admin can change fulfillment status
+          isAdmin() &&
+          isValidOrder(incoming()) &&
+          incoming().id == existing().id &&
+          incoming().userId == existing().userId
+        ) ||
+        (
+          // Customer can cancel ONLY if order is still Pending
+          resource.data.userId == request.auth.uid &&
+          existing().status == 'Pending' &&
+          incoming().status == 'Cancelled' &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(orderId);
+    }
+
+    // =========================================================================
+    // COLLECTION: /admins/{adminId}
+    // Immutable role table; locked from client-side direct writes.
+    // =========================================================================
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only manageable via server or cloud console
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Aura Commerce",
+  "description": "Production-ready, secure modular e-commerce platform with real-time inventory management, responsive analytics charts, dynamic product catalog, and role-based admin controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

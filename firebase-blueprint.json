@@ -1,0 +1,211 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "E-commerce product catalog item with inventory tracking and pricing",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique alphanumeric identifier for the product",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Commercial title of the item",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed markdown or plain text description of the product",
+          "minLength": 10,
+          "maxLength": 2000
+        },
+        "price": {
+          "type": "number",
+          "description": "Current retail price in USD"
+        },
+        "cost": {
+          "type": "number",
+          "description": "Wholesale acquisition cost for margin calculations"
+        },
+        "category": {
+          "type": "string",
+          "description": "Department category",
+          "enum": ["Electronics", "Apparel", "Home & Living", "Accessories", "Footwear"]
+        },
+        "stock": {
+          "type": "number",
+          "description": "Available inventory units in warehouse"
+        },
+        "sku": {
+          "type": "string",
+          "description": "Stock Keeping Unit",
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Public HTTPS URL to primary product photograph",
+          "maxLength": 1000
+        },
+        "rating": {
+          "type": "number",
+          "description": "Average review score from 1.0 to 5.0"
+        },
+        "reviewCount": {
+          "type": "number",
+          "description": "Total customer reviews submitted"
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Whether the product is highlighted on the storefront"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of product entry creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of latest modification"
+        }
+      },
+      "required": ["id", "name", "description", "price", "category", "stock", "sku", "imageUrl"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase transaction including line items, fulfillment state, and shipping info",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique order identifier",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the purchasing customer or guest identifier",
+          "maxLength": 64
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "PII: Contact email address for order notifications",
+          "maxLength": 120
+        },
+        "customerName": {
+          "type": "string",
+          "description": "PII: Full recipient name",
+          "maxLength": 100
+        },
+        "shippingAddress": {
+          "type": "string",
+          "description": "PII: Destination postal address",
+          "maxLength": 250
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Order subtotal before shipping and taxes"
+        },
+        "discount": {
+          "type": "number",
+          "description": "Discount deduction applied via promo code"
+        },
+        "shippingCost": {
+          "type": "number",
+          "description": "Calculated postage charge"
+        },
+        "tax": {
+          "type": "number",
+          "description": "State/regional tax assessment"
+        },
+        "total": {
+          "type": "number",
+          "description": "Grand total paid by customer"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current lifecycle state of order fulfillment",
+          "enum": ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Simulated payment gateway token",
+          "enum": ["credit_card", "paypal", "apple_pay", "mock_gateway"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "description": "Payment authorization status",
+          "enum": ["paid", "pending", "failed"]
+        },
+        "itemsCount": {
+          "type": "number",
+          "description": "Total quantity of items ordered"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of checkout completion"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp of latest status change"
+        }
+      },
+      "required": ["id", "userId", "customerEmail", "customerName", "shippingAddress", "total", "status", "paymentStatus", "createdAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Privileged administrator identity record for RBAC",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth user ID",
+          "maxLength": 64
+        },
+        "email": {
+          "type": "string",
+          "description": "Verified administrator email",
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "description": "Permission scope tier",
+          "enum": ["admin", "superadmin"]
+        },
+        "grantedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when admin status was provisioned"
+        }
+      },
+      "required": ["uid", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": {
+        "$ref": "#/entities/Product"
+      },
+      "description": "Publicly readable product catalog with admin-restricted write access"
+    },
+    "/orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/Order"
+      },
+      "description": "Protected purchase orders accessible only to the customer who created it or verified admins"
+    },
+    "/admins/{adminId}": {
+      "schema": {
+        "$ref": "#/entities/AdminUser"
+      },
+      "description": "Immutable role-based authorization whitelist for store operations"
+    }
+  }
+}
